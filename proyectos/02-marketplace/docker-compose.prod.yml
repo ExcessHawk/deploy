@@ -56,6 +56,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-marketplace}
       REDIS_URL: redis://redis:6379
+      UPLOADS_DIR: /data/uploads
+    volumes:
+      # Las fotos de producto sobreviven al redespliegue; la imagen no las trae.
+      - marketplace_uploads:/data/uploads
     ports:
       - '127.0.0.1:3102:3102'
     depends_on:
@@ -77,3 +81,4 @@ services:
 
 volumes:
   marketplace_pgdata:
+  marketplace_uploads:
