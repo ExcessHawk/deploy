@@ -29,17 +29,21 @@ say()  { printf '\n==> %s\n' "$1"; }
 paso() { printf '  %s\n' "$1"; }
 
 # Los repos de código pueden colgar del mismo nivel que este, de uno más
-# arriba, o de una carpeta intermedia. Se busca en todos antes de rendirse.
+# arriba, o de una carpeta intermedia con cualquier nombre.
+#
+# La carpeta intermedia era "marketplace" a secas cuando solo había un
+# proyecto. Ahora se busca en cualquier subcarpeta de primer nivel, porque cada
+# proyecto agrupa sus clones como quiera: aichat/, citas/, lo que sea.
 buscar() {
-  local nombre="$1" dir
-  local candidatos=(
-    "$BASE/$nombre"
-    "$BASE/marketplace/$nombre"
-    "$(dirname "$BASE")/$nombre"
-    "$(dirname "$BASE")/marketplace/$nombre"
-  )
-  for dir in "${candidatos[@]}"; do
+  local nombre="$1" dir raiz
+  for dir in "$BASE/$nombre" "$(dirname "$BASE")/$nombre"; do
     [ -d "$dir" ] && { echo "$dir"; return 0; }
+  done
+  for raiz in "$BASE" "$(dirname "$BASE")"; do
+    # -maxdepth 2 a propósito: una carpeta intermedia, no un árbol entero.
+    # Sin esto, un node_modules con un directorio del mismo nombre ganaría.
+    dir="$(find "$raiz" -maxdepth 2 -mindepth 2 -type d -name "$nombre" -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -1)"
+    [ -n "$dir" ] && { echo "$dir"; return 0; }
   done
   return 1
 }
