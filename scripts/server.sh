@@ -107,7 +107,7 @@ for slug in "${proyectos[@]}"; do
   [ -f "$carpeta/proyecto.env" ] || { echo "No existe proyectos/$slug/proyecto.env"; exit 1; }
 
   NOMBRE="" HOST="" ALIAS="" WEB_REPO="" WEB_ROOT="" WEB_BUILD_ENV=""
-  API_REPO="" API_CONTAINER="" API_PORT="" COMPOSE=""
+  API_REPO="" API_CONTAINER="" API_PORT="" API_HEALTH="" COMPOSE=""
   SEED_CMD="" REFRESH_CMD="" NGINX_CONF="" CRON_FILE=""
   # shellcheck disable=SC1090
   . "$carpeta/proyecto.env"
@@ -181,10 +181,19 @@ for slug in "${proyectos[@]}"; do
     "${compose[@]}" build api
     "${compose[@]}" up -d
 
-    paso "esperando a la API"
+    # Cada proyecto nombra su ruta de salud: el marketplace distingue entre
+    # vivo y listo, esta no. Preguntarle por la equivocada hace que el script
+    # se rinda con la API perfectamente arriba, y entonces las migraciones
+    # nunca corren.
+    salud="${API_HEALTH:-/health}"
+    paso "esperando a la API en $salud"
     for i in $(seq 1 30); do
-      curl -fsS -m 5 "http://127.0.0.1:${API_PORT}/health/ready" >/dev/null 2>&1 && { paso "lista"; break; }
-      [ "$i" -eq 30 ] && { echo "  no respondió; mira: docker logs $API_CONTAINER"; exit 1; }
+      curl -fsS -m 5 "http://127.0.0.1:${API_PORT}${salud}" >/dev/null 2>&1 && { paso "lista"; break; }
+      [ "$i" -eq 30 ] && {
+        echo "  no respondió en http://127.0.0.1:${API_PORT}${salud}"
+        echo "  mira: docker logs $API_CONTAINER"
+        exit 1
+      }
       sleep 2
     done
 
@@ -197,6 +206,15 @@ for slug in "${proyectos[@]}"; do
     cp "$carpeta/$NGINX_CONF" "$destino"
     ln -sf "$destino" "/etc/nginx/sites-enabled/$slug.conf"
     paso "nginx: $slug.conf"
+
+    # Antes los sitios se llamaban por proyecto y no por slug. Si quedó uno de
+    # esos habilitado, su bloque upstream choca con el nuevo y nginx se niega
+    # a arrancar con "duplicate upstream".
+    viejo="/etc/nginx/sites-enabled/$(basename "$NGINX_CONF")"
+    if [ -e "$viejo" ] && [ "$viejo" != "/etc/nginx/sites-enabled/$slug.conf" ]; then
+      rm -f "$viejo"
+      paso "quitado el enlace viejo $(basename "$viejo")"
+    fi
   fi
 
   if $do_tls && [ -n "$HOST" ]; then
