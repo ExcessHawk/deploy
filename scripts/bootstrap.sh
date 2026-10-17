@@ -15,16 +15,17 @@ SSH_PORT="${SSH_PORT:-22}"
 DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE="$(dirname "$DEPLOY")"
 
+# La misma busqueda que server.sh: la carpeta intermedia puede llamarse como
+# sea. Si aqui no encuentra el repo, se salta sus secretos en silencio y el
+# fallo aparece mucho despues, disfrazado.
 buscar() {
-  local nombre="$1" dir
-  local candidatos=(
-    "$BASE/$nombre"
-    "$BASE/marketplace/$nombre"
-    "$(dirname "$BASE")/$nombre"
-    "$(dirname "$BASE")/marketplace/$nombre"
-  )
-  for dir in "${candidatos[@]}"; do
+  local nombre="$1" dir raiz
+  for dir in "$BASE/$nombre" "$(dirname "$BASE")/$nombre"; do
     [ -d "$dir" ] && { echo "$dir"; return 0; }
+  done
+  for raiz in "$BASE" "$(dirname "$BASE")"; do
+    dir="$(find "$raiz" -maxdepth 2 -mindepth 2 -type d -name "$nombre" -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -1)"
+    [ -n "$dir" ] && { echo "$dir"; return 0; }
   done
   return 1
 }
@@ -137,7 +138,8 @@ for env in "$DEPLOY"/proyectos/*/proyecto.env; do
 
   destino="$(buscar "$API_REPO" || true)"
   if [ -z "$destino" ]; then
-    echo "    $slug: no encontre el repo $API_REPO, lo salto"
+    echo "    $slug: AVISO, no encontre el repo $API_REPO: sin api.env ni .env"
+    echo "    $slug: clonalo y vuelve a correr bootstrap, o el deploy fallara despues"
     continue
   fi
 
