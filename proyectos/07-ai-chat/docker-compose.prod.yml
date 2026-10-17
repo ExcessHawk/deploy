@@ -40,6 +40,10 @@ services:
       - ${BACK_CONTEXT:?falta BACK_CONTEXT}/api.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aichat}
+      UPLOADS_DIR: /data/uploads
+    volumes:
+      # Los adjuntos sobreviven al redespliegue; la imagen no los trae.
+      - aichat_uploads:/data/uploads
     ports:
       - '127.0.0.1:3107:3107'
     depends_on:
@@ -59,3 +63,4 @@ services:
 
 volumes:
   aichat_pgdata:
+  aichat_uploads:

@@ -20,6 +20,11 @@ ENV NODE_ENV=production
 ENV PORT=3102
 
 # Corre como el usuario sin privilegios de la imagen, no como root.
+# El volumen de subidas se monta vacio y hereda el dueño de esta carpeta en la
+# imagen. Sin crearla aquí, Docker la hace root:root, el proceso corre como bun
+# y cada subida muere con EACCES.
+RUN mkdir -p /data/uploads && chown -R bun:bun /data
+
 USER bun
 
 EXPOSE 3102
