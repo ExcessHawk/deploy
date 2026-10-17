@@ -81,6 +81,16 @@ NGINX_CONF=nginx/helpdesk.conf
 CRON_FILE=cron/helpdesk-demo
 ```
 
+`WEB_REPO` y `API_REPO` aceptan **rutas, no solo nombres**. Un proyecto que no
+esté partido en dos repos nombra sus subcarpetas y listo:
+
+```bash
+WEB_REPO=sistema-de-citas-medicas/frontend-veloce
+API_REPO=sistema-de-citas-medicas/backend-veloce
+```
+
+Cuando las dos salen del mismo clon, el `git pull` se hace una sola vez.
+
 Junto a eso van su `docker-compose.prod.yml`, su `Dockerfile.api`, su
 `api.env.example` y su configuración de nginx. Lo más rápido es copiar la
 carpeta de `02-marketplace` y cambiar nombres, puertos y dominio.

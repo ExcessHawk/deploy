@@ -129,10 +129,24 @@ for slug in "${proyectos[@]}"; do
   fi
 
   if $do_pull; then
-    for repo in "$WEB_DIR" "$API_DIR"; do
-      [ -n "$repo" ] || continue
-      git -C "$repo" pull --ff-only --quiet
-      paso "$(basename "$repo") en $(git -C "$repo" rev-parse --short HEAD)"
+    # Un proyecto puede tener su backend y su frontend en subcarpetas del mismo
+    # clon, así que se trae por repositorio y no por carpeta: si no, se haría
+    # el mismo pull dos veces.
+    tirados=()
+    for dir in "$WEB_DIR" "$API_DIR"; do
+      [ -n "$dir" ] || continue
+      raiz=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || {
+        paso "$(basename "$dir") no es un repositorio, lo dejo como está"
+        continue
+      }
+      ya=false
+      for visto in "${tirados[@]:-}"; do
+        [ "$visto" = "$raiz" ] && ya=true && break
+      done
+      $ya && continue
+      tirados+=("$raiz")
+      git -C "$raiz" pull --ff-only --quiet
+      paso "$(basename "$raiz") en $(git -C "$raiz" rev-parse --short HEAD)"
     done
   fi
 
