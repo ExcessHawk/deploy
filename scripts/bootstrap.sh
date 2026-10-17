@@ -154,14 +154,12 @@ for env in "$DEPLOY"/proyectos/*/proyecto.env; do
             "$plantilla"
       } > "$destino/api.env"
     else
-      cat > "$destino/api.env" <<EOF
-PORT=${API_PORT:-3000}
-NODE_ENV=production
-LOG_LEVEL=info
-JWT_SECRET=$(openssl rand -base64 48)
-JWT_REFRESH_SECRET=$(openssl rand -base64 48)
-TRUST_PROXY_HOPS=1
-EOF
+      # Antes aquí se inventaba una plantilla mínima. Era peor que fallar: el
+      # archivo salía con buena cara y sin DEMO_MODE ni CORS_ORIGINS, y el
+      # error aparecía mucho después, disfrazado de otra cosa.
+      echo "    $slug: falta proyectos/$slug/api.env.example"
+      echo "         No invento uno: cada proyecto necesita sus propias variables."
+      exit 1
     fi
     chown deploy:deploy "$destino/api.env"
     chmod 600 "$destino/api.env"

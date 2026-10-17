@@ -142,6 +142,13 @@ sudo -E bash scripts/server.sh --cron
 
 ## Lo que hay que tener claro
 
+**Cada proyecto necesita su `api.env.example`.** `bootstrap.sh` lo copia al lado
+del backend rellenando solo los campos vacíos. Si falta, **falla**: antes
+inventaba una plantilla mínima, y el resultado era un archivo con buena cara y
+sin `DEMO_MODE` ni `CORS_ORIGINS`. El error aparecía mucho después y disfrazado
+— la demostración devolvía `404 Not Found` en texto plano, el frontend lo
+intentaba parsear como JSON y se quejaba de la columna 5.
+
 **Los secretos se generan en el servidor.** No hay ninguno en este repo;
 `api.env.example` es la plantilla con los campos vacíos. `bootstrap.sh` la copia
 rellenando solo lo que está en blanco, para no perder variables que el proyecto
