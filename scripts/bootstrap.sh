@@ -147,7 +147,12 @@ for env in "$DEPLOY"/proyectos/*/proyecto.env; do
     if [ -f "$plantilla" ]; then
       # Se parte de la plantilla del proyecto y solo se rellenan los secretos
       # vacios, para no perder ninguna variable que el proyecto necesite.
-      sed         -e "s|^JWT_SECRET=$|JWT_SECRET=$(openssl rand -base64 48)|"         -e "s|^JWT_REFRESH_SECRET=$|JWT_REFRESH_SECRET=$(openssl rand -base64 48)|"         -e "s|^PAYMENT_WEBHOOK_SECRET=$|PAYMENT_WEBHOOK_SECRET=$(openssl rand -base64 36)|"         "$plantilla" > "$destino/api.env"
+      {
+        sed -e "s|^JWT_SECRET=$|JWT_SECRET=$(openssl rand -base64 48)|" \
+            -e "s|^JWT_REFRESH_SECRET=$|JWT_REFRESH_SECRET=$(openssl rand -base64 48)|" \
+            -e "s|^PAYMENT_WEBHOOK_SECRET=$|PAYMENT_WEBHOOK_SECRET=$(openssl rand -base64 36)|" \
+            "$plantilla"
+      } > "$destino/api.env"
     else
       cat > "$destino/api.env" <<EOF
 PORT=${API_PORT:-3000}
