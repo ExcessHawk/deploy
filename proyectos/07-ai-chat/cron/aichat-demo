@@ -1,0 +1,15 @@
+# Reinicia la demostración cada hora, en punto.
+#
+# Instalar con:
+#   sudo cp deploy/cron/aichat-demo /etc/cron.d/aichat-demo
+#   sudo chmod 644 /etc/cron.d/aichat-demo
+#
+# La página promete que los datos se reinician solos. Esto es esa promesa.
+# demo:refresh borra las conversaciones de los visitantes y vuelve a sembrar
+# las dos de ejemplo. Solo toca filas de cuentas @demo.chat.mx y se niega a
+# correr si DEMO_MODE no está encendido.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 * * * * deploy cd /srv/aichat && docker compose --env-file .env -f deploy/docker-compose.prod.yml exec -T api bun run demo:refresh >> /var/log/aichat-demo.log 2>&1

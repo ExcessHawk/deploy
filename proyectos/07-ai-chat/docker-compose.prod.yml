@@ -1,0 +1,61 @@
+# Pila del chat para el VPS.
+#
+# Nada publica un puerto a internet: Postgres responde solo en 127.0.0.1 (útil
+# para psql por SSH) y la API también, de modo que nginx es la única puerta.
+#
+# La imagen es pgvector y no postgres a secas porque el esquema declara la
+# extensión; hoy no se usa, y el día que se use no hay que migrar de imagen con
+# datos dentro.
+
+name: aichat-demo
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: aichat_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?ponlo en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ponlo en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-aichat}
+    ports:
+      - '127.0.0.1:5447:5432'
+    volumes:
+      - aichat_pgdata:/var/lib/postgresql/data
+      - ${BACK_CONTEXT:?falta BACK_CONTEXT}/docker/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-aichat}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ${BACK_CONTEXT:?falta BACK_CONTEXT}
+      dockerfile: ${DEPLOY_DIR:?falta DEPLOY_DIR}/Dockerfile.api
+    image: aichat-api:latest
+    container_name: aichat_api
+    restart: unless-stopped
+    env_file:
+      - ${BACK_CONTEXT:?falta BACK_CONTEXT}/api.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aichat}
+    ports:
+      - '127.0.0.1:3107:3107'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'bun', '-e', "fetch('http://127.0.0.1:3107/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+
+volumes:
+  aichat_pgdata:
