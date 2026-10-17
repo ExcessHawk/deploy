@@ -1,0 +1,3 @@
+# Los secretos los genera bootstrap.sh en el servidor, dentro del repo del backend.
+api.env
+.env

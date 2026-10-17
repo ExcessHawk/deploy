@@ -1,0 +1,19 @@
+# Reinicia la demostración cada hora, en punto.
+#
+# Instalar con:
+#   sudo cp deploy/cron/marketplace-demo /etc/cron.d/marketplace-demo
+#   sudo chmod 644 /etc/cron.d/marketplace-demo
+#
+# La página promete que los datos se reinician solos. Esto es esa promesa.
+# demo:refresh borra lo que hicieron los visitantes y vuelve a sembrar el
+# pedido de ejemplo. Solo toca filas de cuentas @demo.marketplace.mx y se
+# niega a correr si DEMO_MODE no está encendido.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 * * * * deploy cd /srv/marketplace && docker compose --env-file .env -f deploy/docker-compose.prod.yml exec -T api bun run demo:refresh >> /var/log/marketplace-demo.log 2>&1
+
+# Certbot renueva solo con su propio timer; esto solo recarga nginx por si
+# renovó durante la noche.
+17 4 * * * root systemctl reload nginx

@@ -1,0 +1,27 @@
+# El contexto de build es la raíz de este repo (marketplace-back).
+#
+# Los contratos de Zod ya no se copian de una carpeta hermana: se instalan
+# desde github:ExcessHawk/marketplace-contracts, así que el build necesita red.
+FROM oven/bun:1.4.2-alpine
+
+WORKDIR /app
+
+# Las dependencias primero, en su propia capa: mientras package.json y el
+# lockfile no cambien, Docker reutiliza esta capa entre despliegues.
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+COPY src ./src
+COPY scripts ./scripts
+COPY drizzle ./drizzle
+COPY drizzle.config.ts tsconfig.json ./
+
+ENV NODE_ENV=production
+ENV PORT=3102
+
+# Corre como el usuario sin privilegios de la imagen, no como root.
+USER bun
+
+EXPOSE 3102
+
+CMD ["bun", "run", "src/index.ts"]
