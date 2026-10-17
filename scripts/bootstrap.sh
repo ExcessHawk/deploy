@@ -10,33 +10,28 @@
 set -euo pipefail
 
 SSH_PORT="${SSH_PORT:-22}"
-# Los secretos viven en el repo del backend, al lado de su codigo. Este script
-# esta en otro repo, asi que lo busca cerca en vez de adivinar la ruta.
+# Los secretos de cada proyecto viven junto a su backend. Este script esta en
+# otro repo, asi que los busca cerca en vez de adivinar rutas.
 DEPLOY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE="$(dirname "$DEPLOY")"
-buscar_back() {
-  local dir
+
+buscar() {
+  local nombre="$1" dir
   local candidatos=(
-    "$BASE/marketplace-back"
-    "$BASE/marketplace/marketplace-back"
-    "$(dirname "$BASE")/marketplace-back"
-    "$(dirname "$BASE")/marketplace/marketplace-back"
+    "$BASE/$nombre"
+    "$BASE/marketplace/$nombre"
+    "$(dirname "$BASE")/$nombre"
+    "$(dirname "$BASE")/marketplace/$nombre"
   )
   for dir in "${candidatos[@]}"; do
     [ -d "$dir" ] && { echo "$dir"; return 0; }
   done
   return 1
 }
-APP_DIR="${APP_DIR:-$(buscar_back || true)}"
+
 WEB_DIR=/var/www
 
-if [ -z "$APP_DIR" ] || [ ! -f "$APP_DIR/package.json" ]; then
-  echo "No encontré el repo marketplace-back cerca de $DEPLOY."
-  echo "Si está en otro lado: APP_DIR=/ruta/marketplace-back bash $0"
-  exit 1
-fi
 echo "despliegue: $DEPLOY"
-echo "backend:    $APP_DIR"
 
 echo "==> paquetes base"
 export DEBIAN_FRONTEND=noninteractive
@@ -121,53 +116,67 @@ else
 fi
 
 echo "==> carpetas"
-mkdir -p "$WEB_DIR/portafolio" "$WEB_DIR/marketplace"
-chown -R deploy:deploy "$WEB_DIR/portafolio" "$WEB_DIR/marketplace"
+for env in "$DEPLOY"/proyectos/*/proyecto.env; do
+  WEB_ROOT=""
+  # shellcheck disable=SC1090
+  . "$env"
+  [ -n "$WEB_ROOT" ] || continue
+  mkdir -p "$WEB_ROOT"
+  chown -R deploy:deploy "$WEB_ROOT"
+  echo "    $WEB_ROOT"
+done
 
-echo "==> secretos de la API"
-if [ ! -f "$APP_DIR/api.env" ]; then
-  umask 077
-  cat > "$APP_DIR/api.env" <<EOF
-PORT=3102
+echo "==> secretos"
+# Uno por proyecto que tenga backend. Se generan aqui y nunca se versionan.
+for env in "$DEPLOY"/proyectos/*/proyecto.env; do
+  slug=$(basename "$(dirname "$env")")
+  NOMBRE="" HOST="" API_REPO="" API_PORT="" WEB_ROOT=""
+  # shellcheck disable=SC1090
+  . "$env"
+  [ -n "$API_REPO" ] || continue
+
+  destino="$(buscar "$API_REPO" || true)"
+  if [ -z "$destino" ]; then
+    echo "    $slug: no encontre el repo $API_REPO, lo salto"
+    continue
+  fi
+
+  plantilla="$DEPLOY/proyectos/$slug/api.env.example"
+  if [ ! -f "$destino/api.env" ]; then
+    umask 077
+    if [ -f "$plantilla" ]; then
+      # Se parte de la plantilla del proyecto y solo se rellenan los secretos
+      # vacios, para no perder ninguna variable que el proyecto necesite.
+      sed         -e "s|^JWT_SECRET=$|JWT_SECRET=$(openssl rand -base64 48)|"         -e "s|^JWT_REFRESH_SECRET=$|JWT_REFRESH_SECRET=$(openssl rand -base64 48)|"         -e "s|^PAYMENT_WEBHOOK_SECRET=$|PAYMENT_WEBHOOK_SECRET=$(openssl rand -base64 36)|"         "$plantilla" > "$destino/api.env"
+    else
+      cat > "$destino/api.env" <<EOF
+PORT=${API_PORT:-3000}
 NODE_ENV=production
 LOG_LEVEL=info
-
 JWT_SECRET=$(openssl rand -base64 48)
 JWT_REFRESH_SECRET=$(openssl rand -base64 48)
-JWT_ACCESS_EXPIRES=1h
-JWT_REFRESH_EXPIRES=30d
-
-PAYMENT_WEBHOOK_SECRET=$(openssl rand -base64 36)
-
-CORS_ORIGINS=https://alfredomejia.com.mx,https://www.alfredomejia.com.mx,https://demo.alfredomejia.com.mx
 TRUST_PROXY_HOPS=1
-
-RATE_LIMIT_MAX=100
-AUTH_RATE_LIMIT_MAX=10
-
-PLATFORM_COMMISSION_BPS=1000
-PAYOUT_HOLD_DAYS=0
-
-DEMO_MODE=true
 EOF
-  chown deploy:deploy "$APP_DIR/api.env"
-  chmod 600 "$APP_DIR/api.env"
-  echo "    api.env generado con secretos nuevos"
-else
-  echo "    api.env ya existía, no lo toco"
-fi
+    fi
+    chown deploy:deploy "$destino/api.env"
+    chmod 600 "$destino/api.env"
+    echo "    $slug: api.env generado"
+  else
+    echo "    $slug: api.env ya existia, no lo toco"
+  fi
 
-if [ ! -f "$APP_DIR/.env" ]; then
-  umask 077
-  cat > "$APP_DIR/.env" <<EOF
-POSTGRES_USER=marketplace
+  if [ ! -f "$destino/.env" ]; then
+    umask 077
+    cat > "$destino/.env" <<EOF
+POSTGRES_USER=${slug##*-}
 POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | head -c 40)
-POSTGRES_DB=marketplace
+POSTGRES_DB=${slug##*-}
 EOF
-  chown deploy:deploy "$APP_DIR/.env"
-  chmod 600 "$APP_DIR/.env"
-  echo "    .env de Postgres generado"
-fi
+    chown deploy:deploy "$destino/.env"
+    chmod 600 "$destino/.env"
+    echo "    $slug: .env de Postgres generado"
+  fi
+done
 
 echo "==> firewall"
 # Importante: se permite SSH ANTES de encender ufw, o te quedas fuera.
@@ -186,9 +195,8 @@ rm -f /etc/nginx/sites-enabled/default
 systemctl enable --now nginx
 
 echo
-echo "Listo. Los secretos quedaron en:"
-echo "  $APP_DIR/.env      (usuario y contraseña de Postgres)"
-echo "  $APP_DIR/api.env   (JWT y webhooks)"
+echo "Listo. Los secretos quedaron junto al backend de cada proyecto,"
+echo "en sus archivos .env y api.env, con permisos 600."
 echo
 echo "Lo que sigue, desde este repo:"
 echo "  bash scripts/server.sh"
