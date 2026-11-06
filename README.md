@@ -91,6 +91,25 @@ API_REPO=sistema-de-citas-medicas/backend-veloce
 
 Cuando las dos salen del mismo clon, el `git pull` se hace una sola vez.
 
+Un proyecto que no esté partido en dos **ni tenga frontend** deja `WEB_REPO`
+vacío y ya: `11-futbol` es un dashboard de Streamlit, así que no hay nada
+estático que construir ni que publicar, y `--web` simplemente no hace nada.
+
+Dos ajustes más que ese proyecto estrenó:
+
+```bash
+# La ruta de salud que responde, no la que suponemos. Streamlit trae la suya.
+API_HEALTH=/_stcore/health
+
+# Cómo se crea el esquema. Por omisión es "bun run db:migrate", que es lo que
+# usan los demás; este proyecto es de Python. Vacío salta el paso.
+MIGRATE_CMD="python scripts/init_db.py"
+```
+
+`MIGRATE_CMD` fue la única vez que `server.sh` sí se tocó al agregar un
+proyecto: antes la orden de migrar estaba escrita a mano dentro del script, y
+un proyecto que no fuera de bun no tenía forma de desplegarse.
+
 Junto a eso van su `docker-compose.prod.yml`, su `Dockerfile.api`, su
 `api.env.example` y su configuración de nginx. Lo más rápido es copiar la
 carpeta de `02-marketplace` y cambiar nombres, puertos y dominio.
@@ -108,6 +127,14 @@ dockerfile: ${DEPLOY_DIR:?falta DEPLOY_DIR}/Dockerfile.api
 Los puertos salen de `00-base/PLANTILLA.md` en el repo de planeación: 3101 a
 3109 para las APIs y 5441 a 5449 para Postgres. Todo publica **solo en
 127.0.0.1**; nginx es la única puerta.
+
+| Proyecto | Dominio | API | Postgres |
+|---|---|---|---|
+| `00-portafolio` | alfredomejia.com.mx | — | — |
+| `02-marketplace` | demo.alfredomejia.com.mx | 3102 | 5442 |
+| `07-ai-chat` | chat.alfredomejia.com.mx | 3107 | 5447 |
+| `10-citas` | citas.alfredomejia.com.mx | 5000 | 5444 |
+| `11-futbol` | futbol.alfredomejia.com.mx | 3108 | 5448 |
 
 ## Primera vez en un servidor nuevo
 

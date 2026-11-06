@@ -1,0 +1,61 @@
+# El contexto de build es la raíz del repo de futbol-analytics.
+#
+# Python 3.14 porque es con lo que están fijadas las versiones de
+# requirements.txt y con lo que pasa la suite de pruebas. Bajar de versión aquí
+# obliga a reinstalar ruedas distintas de pandas y numpy.
+FROM python:3.14-slim
+
+WORKDIR /app
+
+# tesseract-ocr y sus modelos de idioma vienen del gestor de paquetes en vez de
+# descargarse con scripts/get_tessdata.py: así quedan dentro de la imagen y no
+# dependen de que /app/data exista, que es donde se monta un volumen.
+#
+# libglib2.0-0 lo pide opencv incluso en la variante headless.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        tesseract-ocr-spa \
+        tesseract-ocr-eng \
+        libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Las dependencias en su propia capa: mientras requirements.txt no cambie,
+# Docker la reutiliza entre despliegues y no vuelve a compilar nada.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# `src/futbol` se instala como paquete para que `import futbol` funcione igual
+# aquí que en el entorno de desarrollo. --no-deps porque ya están arriba.
+COPY pyproject.toml ./
+COPY src ./src
+RUN pip install --no-cache-dir --no-deps -e .
+
+COPY app ./app
+COPY scripts ./scripts
+COPY sql ./sql
+COPY .streamlit ./.streamlit
+
+ENV PYTHONUNBUFFERED=1 \
+    TESSERACT_CMD=tesseract \
+    # matplotlib escribe su caché al arrancar; sin esto lo intenta en el HOME
+    # del usuario, que no existe, y suelta un aviso en cada gráfico.
+    MPLCONFIGDIR=/tmp/matplotlib
+
+# El volumen de datos se monta vacío y hereda el dueño de esta carpeta en la
+# imagen. Sin crearla aquí queda root:root, el proceso corre sin privilegios y
+# la actualización diaria muere al escribir su bitácora.
+RUN useradd --create-home --uid 10001 futbol \
+    && mkdir -p /app/data/raw /app/data/processed \
+    && chown -R futbol:futbol /app/data
+
+USER futbol
+
+EXPOSE 8501
+
+# --server.address 0.0.0.0 para que nginx lo alcance desde fuera del
+# contenedor; el puerto sigue publicado solo en 127.0.0.1 del anfitrión.
+CMD ["streamlit", "run", "app/Inicio.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true"]

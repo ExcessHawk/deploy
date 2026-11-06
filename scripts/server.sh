@@ -113,6 +113,10 @@ for slug in "${proyectos[@]}"; do
   NOMBRE="" HOST="" ALIAS="" WEB_REPO="" WEB_ROOT="" WEB_BUILD_ENV=""
   API_REPO="" API_CONTAINER="" API_PORT="" API_HEALTH="" COMPOSE=""
   SEED_CMD="" REFRESH_CMD="" NGINX_CONF="" CRON_FILE=""
+  # Cómo se crea o actualiza el esquema. Casi todos los proyectos son de bun y
+  # se quedan con el valor de siempre; el de fútbol es de Python. Vacío lo
+  # salta, para un proyecto que no tenga base de datos.
+  MIGRATE_CMD="bun run db:migrate"
   # shellcheck disable=SC1090
   . "$carpeta/proyecto.env"
 
@@ -201,8 +205,12 @@ for slug in "${proyectos[@]}"; do
       sleep 2
     done
 
-    paso "migraciones"
-    "${compose[@]}" exec -T api bun run db:migrate
+    if [ -n "$MIGRATE_CMD" ]; then
+      paso "migraciones"
+      # Sin comillas a propósito: MIGRATE_CMD es una orden con sus argumentos.
+      # shellcheck disable=SC2086
+      "${compose[@]}" exec -T api $MIGRATE_CMD
+    fi
   fi
 
   if $do_nginx && [ -n "$NGINX_CONF" ]; then

@@ -1,0 +1,82 @@
+# Pila de Fútbol Analytics para el VPS.
+#
+# Nada publica un puerto a internet: Postgres responde solo en 127.0.0.1 (para
+# restaurar el volcado por SSH) y Streamlit también, de modo que nginx es la
+# única puerta.
+
+name: futbol
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: futbol_postgres
+    restart: unless-stopped
+    # Los nombres son los que bootstrap.sh escribe en .env; cambiarlos aquí
+    # obligaría a tocar bootstrap.sh, que es común a todos los proyectos.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?ponlo en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?ponlo en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-futbol}
+    ports:
+      - '127.0.0.1:5448:5432'
+    volumes:
+      - futbol_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-futbol}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  api:
+    build:
+      context: ${BACK_CONTEXT:?falta BACK_CONTEXT}
+      dockerfile: ${DEPLOY_DIR:?falta DEPLOY_DIR}/Dockerfile.api
+    image: futbol-app:latest
+    container_name: futbol_app
+    restart: unless-stopped
+    env_file:
+      - ${BACK_CONTEXT:?falta BACK_CONTEXT}/api.env
+    environment:
+      # El contenedor habla con Postgres por la red de compose, no por el
+      # puerto publicado: dentro son 5432 y el nombre del servicio.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      # La aplicación los lee con estos nombres; el .env los guarda con los
+      # de Postgres. La traducción pasa aquí y en ningún otro sitio.
+      DB_NAME: ${POSTGRES_DB:-futbol}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # La actualización diaria descarga CSV y deja su bitácora aquí; sin el
+      # volumen se perdería en cada redespliegue.
+      - futbol_data:/app/data
+    ports:
+      - '127.0.0.1:3108:8501'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # La imagen no trae curl; urllib sí viene con Python.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4).status == 200 else 1)"
+      interval: 30s
+      timeout: 6s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+
+volumes:
+  futbol_pgdata:
+  futbol_data:

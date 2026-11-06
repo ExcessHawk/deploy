@@ -1,0 +1,18 @@
+# Actualización diaria de Fútbol Analytics.
+#
+# Instalar con:
+#   sudo cp deploy/proyectos/11-futbol/cron/futbol-update /etc/cron.d/futbol-update
+#   sudo chmod 644 /etc/cron.d/futbol-update
+#
+# Esto NO es como el cron de las demostraciones: no borra nada ni reinicia
+# datos. Baja los resultados de ayer, recalcula las predicciones de la semana y
+# vuelve a dormir. Tarda alrededor de un minuto.
+#
+# A las 06:00 hora de México porque la cuota diaria de API-Football se reinicia
+# a las 00:00 UTC, y para entonces los partidos de la noche anterior en América
+# ya terminaron.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 6 * * * deploy docker exec futbol_app python scripts/update.py >> /var/log/futbol-update.log 2>&1
